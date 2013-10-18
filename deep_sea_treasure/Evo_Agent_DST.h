@@ -14,16 +14,12 @@
 #endif
 
 class Evo_Agent {
-
-    
-    
     double raw_fitness; /// raw fitness calculated by treasure, time
     double treasure;
     double time;
     
     double transformed_treasure;
     double transformed_time;
-    double transformed_fitness; /// transformed fitness after Pareto Transformation
 
     void console_1vector(vector<double>);
     void console_2vector(vector<vector<double> >);
@@ -37,9 +33,10 @@ class Evo_Agent {
     void create_action_vector();
 
 public:
+    double transformed_fitness; /// transformed fitness after Pareto Transformation
     double fitness; /// used for actual evolutionary method
     int get_action(int time);
-    int get_fitness();
+    double get_fitness();
     void mutate();
     int action;
     void show_action_vector();
@@ -84,7 +81,7 @@ void Evo_Agent::create_action_vector(){
     }
 }
 
-int Evo_Agent::get_fitness(){
+double Evo_Agent::get_fitness(){
     return fitness;
 }
 
@@ -145,7 +142,7 @@ void Evo_Agent::show_action_vector() {
 }
 
 void Evo_Agent::mutate() {
-    /// PARAM
+    /// <PARAM>
     int num_mutations=rand()%STEPS;
     for(int i=0; i<num_mutations; i++){
         actions.at(rand()%actions.size())=rand()%ACTIONS;

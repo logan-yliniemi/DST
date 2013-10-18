@@ -44,9 +44,10 @@ using namespace std;
 #define GENERATIONS 2500
 #define STEPS 30
 #define STAT_RUNS 30
-#define BETA 0.65
+#define BETA 0.5
 
 #include "Evo_Agent_DST.h"
+#include "Trig_Transformation.h"
 
 bool pretty_print = false;
 
@@ -120,7 +121,7 @@ double vector_median(vector<double> fit){
     return median;
 }
 double vector_mean(vector<double> fit){
-    double sum=accumulate(fit.begin(), fit.end(), 0);
+    double sum=accumulate(fit.begin(), fit.end(), 0.0);
     double mean = sum / fit.size();
     return mean;
 }
@@ -144,13 +145,13 @@ void act(Evo_Agent* pA, deep_sea* pE) { //agents make their action
             cout << "x: " << pA->x << endl;
             cout << "y: " << pA->y << endl;
             cout << "act: " << pA->action << endl;
-            * */
+            //* */
             /// End Insight
             
             /// If the submarine tries to hit the sea floor...
-            if(pA->action==4 && x==6 && y==5){pA->end_episode=true; return;}
-            if(pA->action==4 && x==6 && y==6){pA->end_episode=true; return;}
-            if(pA->action==4 && x==8 && y==8){pA->end_episode=true; return;}
+            if(pA->action==4 && x==6 && y==5){pA->set_time(STEPS); pA->set_treasure(0); pA->end_episode=true; return;}
+            if(pA->action==4 && x==6 && y==6){pA->set_time(STEPS); pA->set_treasure(0); pA->end_episode=true; return;}
+            if(pA->action==4 && x==8 && y==8){pA->set_time(STEPS); pA->set_treasure(0); pA->end_episode=true; return;}
             /// end the episode.
 
             //Calculate next state
@@ -205,13 +206,31 @@ void react(Evo_Agent* pA, deep_sea* pE, int time) {
 void report(FILE* pFILE, double value) { /// report to text file
     fprintf(pFILE, "%.5f\t", value);
 }
+void newline(FILE* pFILE) { /// report to text file
+    fprintf(pFILE, "\n");
+}
 
-int main() {
+int main() {        
     srand(time(NULL));
+    FILE* pFILE_fit;
     FILE* pFILE_time;
     FILE* pFILE_treasure;
+    pFILE_fit=fopen("fitness.txt","w");
     pFILE_time=fopen("time.txt","w");
     pFILE_treasure=fopen("treasure.txt","w");
+    
+    Trig_Transformation T;
+    vector<double> one;
+    vector<double> two; 
+    one.push_back(30); /// time
+    one.push_back(1); /// treasure
+    two.push_back(11); /// time
+    two.push_back(124); /// treasure
+    
+    T.take_objective_max(one);
+    T.take_objective_max(two);
+    T.calc_nadir();
+    T.calc_utopia();
     
     double TIME_WEIGHT = BETA;
 
@@ -254,13 +273,22 @@ int main() {
                 
                 /// Combine multiple objectives into scalar fitness
                 for (int a = 0; a < pVA->size(); a++) {
-                    /// PARAM
-                    /// Linear Combination of Objectives
-                    pVA->at(a).fitness = (STEPS - pVA->at(a).get_time())*TIME_WEIGHT + pVA->at(a).get_treasure()*(1-TIME_WEIGHT); 
-                    /// Treasure Only
+                    /// <PARAM>
+                    /// <Linear Combination of Objectives>
+                    // pVA->at(a).fitness = (STEPS - pVA->at(a).get_time())*TIME_WEIGHT + pVA->at(a).get_treasure()*(1-TIME_WEIGHT);
+                    /// <Treasure Only>
                     // pVA->at(a).fitness = pVA->at(a).get_treasure();
-                    /// Time Only
+                    /// <Time Only>
                     //pVA->at(a).fitness = (STEPS - pVA->at(a).get_time());
+                    /// <Trigonometric Transformation>
+                    vector<double> MO;
+                    vector<double>* pMO;
+                    MO.push_back(STEPS - pVA->at(a).get_time());
+                    MO.push_back(pVA->at(a).get_treasure());
+                    pMO = &MO;
+                    T.execute_transform(pMO);
+                    pVA->at(a).transformed_fitness =  MO.at(0)*TIME_WEIGHT + MO.at(1)*(1-TIME_WEIGHT);
+                    pVA->at(a).fitness = pVA->at(a).transformed_fitness;
                 }
                 
                 /// eliminate worst-performing agents:
@@ -279,7 +307,7 @@ int main() {
                 double generation_mean = vector_mean(fit);
                 double median_time = vector_median(times);
                 double median_treasure = vector_median(treasures);
-                if(gen % 10 == 0){
+                if(gen % 100 == 0){
                 cout << "Generation\t" << gen << "\ttime:\t" << median_time << "\ttreasure:\t" << median_treasure << "\tfitness:\t" << generation_median << endl;
                 }
                 
@@ -297,7 +325,7 @@ int main() {
                 for(int d=0; d<ELIMINATE; d++){
                     double maxfit = *max_element(fit.begin(), fit.end());
                     int spot = max_element(fit.begin(), fit.end()) - fit.begin();
-                    /// PARAM
+                    /// <PARAM>
                     /// to reduce the rate of convergence, we select the best one (spot) 50% of the time,
                     /// and the other 50% of the time we select a random survivor.
                     if(rand()%2){spot=rand()%pVA->size();}
@@ -308,14 +336,15 @@ int main() {
                     pVA->back().mutate();
                 }
 
-                double report_value=-1; /// set to desired value (avg, median, max, all).
                //For production-level graphs
                if (pretty_print) {
+                   report(pFILE_fit,generation_mean); /// report every result
                    report(pFILE_time,median_time); // Report every result
                    report(pFILE_treasure,median_treasure); // Report every result
                } else {                
                    //For Coarse Results
                    if (gen % (GENERATIONS / 100) == 0) {
+                       report(pFILE_fit,generation_mean); // Report only occasionally
                        report(pFILE_time,median_time); // Report only occasionally
                        report(pFILE_treasure,median_treasure); // Report only occasionally
                    }
@@ -323,11 +352,13 @@ int main() {
             }
 
             //Start a new line in output file for next run
+            fprintf(pFILE_fit,"\n");
             fprintf(pFILE_time,"\n");
             fprintf(pFILE_treasure,"\n");
         }
     fclose(pFILE_time);
     fclose(pFILE_treasure);
+    fclose(pFILE_fit);
     return 0;
 }
 
